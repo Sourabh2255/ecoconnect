@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../store/authStore';
 import { getMyPickups, getEcoPoints, getLeaderboard, schedulePickup, submitReport, getNotifications, markAllRead, getDropPoints } from '../../utils/api';
+import GoogleMap from '../../components/GoogleMap';
 
 // ─── Shared Styles ────────────────────────────────────────────
 const card = { background:'#fff',borderRadius:12,border:'1px solid #e5e7eb',borderTop:'3px solid #16a34a',padding:'1.4rem' };
@@ -473,12 +474,19 @@ function DropPointsTab() {
     <div>
       <h2 style={{color:'#14532d',fontWeight:800,marginBottom:'0.5rem'}}>🗺️ Find Drop Points</h2>
       <p style={{color:'#6b7280',fontSize:'0.875rem',marginBottom:'1.5rem'}}>Locate the nearest waste collection and drop-off points in your area.</p>
-      <div style={{background:'#fff',borderRadius:12,border:'1px solid #e5e7eb',padding:'2rem',textAlign:'center',marginBottom:'1.5rem',height:200,display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:'0.5rem'}}>
-        <div style={{fontSize:'2.5rem'}}>🗺️</div>
-        <div style={{fontWeight:700,color:'#14532d'}}>Interactive Map</div>
-        <div style={{fontSize:'0.82rem',color:'#6b7280'}}>Integrate Google Maps or Leaflet.js for live map view</div>
+      
+      {/* Google Map */}
+      <div style={{marginBottom:'1.5rem'}}>
+        {loading ? (
+          <div style={{height:400,background:'#f3f4f6',borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <div style={{fontSize:'1.5rem',color:'#6b7280'}}>Loading map...</div>
+          </div>
+        ) : (
+          <GoogleMap points={points} />
+        )}
       </div>
-      {loading ? <div style={{color:'#6b7280',textAlign:'center'}}>Loading...</div> : (
+
+      {loading ? <div style={{color:'#6b7280',textAlign:'center'}}>Loading drop points...</div> : (
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))',gap:'1rem'}}>
           {points.map(p=>(
             <div key={p._id} style={{background:'#fff',borderRadius:12,border:'1px solid #e5e7eb',padding:'1.2rem',borderTop:'3px solid #16a34a'}}>
