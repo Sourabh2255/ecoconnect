@@ -3,6 +3,7 @@ const router  = express.Router();
 const { protect, authorize } = require('../middleware/authMiddleware');
 const WasteDeclaration   = require('../models/WasteDeclaration');
 const MarketplaceListing = require('../models/MarketplaceListing');
+const RecyclableWaste    = require('../models/RecyclableWaste');
 const User               = require('../models/User');
 const Notification       = require('../models/Notification');
 
@@ -140,6 +141,16 @@ router.get('/compliance', protect, authorize('industry'), async (req, res) => {
     }
     res.json(alerts);
   } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// Industry view of available recyclable materials
+router.get('/available-materials', protect, authorize('industry'), async (req, res) => {
+  try {
+    const materials = await RecyclableWaste.find({ quantity: { $gt: 0 } });
+    res.json(materials);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
 module.exports = router;

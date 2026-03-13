@@ -1,8 +1,11 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../store/authStore';
-import { getAllRequests, assignCollector, updateReqStatus, getFleet, getAnalytics, getComplaints, resolveComplaint } from '../../utils/api';
+import { 
+  getAllRequests, assignCollector, updateReqStatus, getFleet, 
+  getAnalytics, getComplaints, resolveComplaint, 
+  getRecyclableInventory, updateRecyclableInventory 
+} from '../../utils/api';
 
 const statusStyle = { pending:{bg:'#fef9c3',color:'#854d0e'}, confirmed:{bg:'#dbeafe',color:'#1d4ed8'}, 'en-route':{bg:'#ffedd5',color:'#c2410c'}, collected:{bg:'#dcfce7',color:'#14532d'}, cancelled:{bg:'#fee2e2',color:'#991b1b'} };
 const wasteColors = { organic:'#dcfce7',recyclable:'#dbeafe','e-waste':'#fef9c3',hazardous:'#fee2e2',bulky:'#f3f4f6' };
@@ -15,21 +18,36 @@ export default function GovtDashboard() {
   const [analytics,  setAnalytics]  = useState({});
   const [complaints, setComplaints] = useState([]);
   const [fleet,      setFleet]      = useState([]);
+  const [inventory,  setInventory]  = useState([]); // New state for inventory
   const [filterStatus, setFilterStatus] = useState('all');
   const [loading,    setLoading]    = useState(true);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [r,a,c,f] = await Promise.allSettled([getAllRequests(),getAnalytics(),getComplaints(),getFleet()]);
+      const [r,a,c,f,i] = await Promise.allSettled([
+        getAllRequests(),
+        getAnalytics(),
+        getComplaints(),
+        getFleet(),
+        getRecyclableInventory() // Fetch inventory on load
+      ]);
       if(r.status==='fulfilled') setRequests(r.value.data);
       if(a.status==='fulfilled') setAnalytics(a.value.data);
       if(c.status==='fulfilled') setComplaints(c.value.data);
       if(f.status==='fulfilled') setFleet(f.value.data);
+      if(i.status==='fulfilled') setInventory(i.value.data);
     } finally { setLoading(false); }
   },[]);
 
   useEffect(()=>{ loadData(); },[]);
+
+  // Refetch inventory specifically when that tab is selected
+  useEffect(() => {
+    if (tab === 'recyclable-list') {
+      getRecyclableInventory().then(res => setInventory(res.data));
+    }
+  }, [tab]);
 
   const handleLogout = () => { logout(); nav('/'); };
 
@@ -57,12 +75,39 @@ export default function GovtDashboard() {
     } catch(e) { alert(e.response?.data?.message||'Error'); }
   };
 
+  // New handler for updating inventory
+  const handleUpdateInventory = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const data = {
+      itemName: formData.get('itemName'),
+      quantity: formData.get('quantity'),
+      unit: formData.get('unit'),
+    };
+
+    try {
+      // 1. Send to backend
+      await updateRecyclableInventory(data);
+
+      // 2. Fetch the fresh list immediately
+      const res = await getRecyclableInventory();
+      setInventory(res.data);
+
+      // 3. Clear form and notify
+      e.target.reset();
+      alert('Item added/updated in inventory!');
+    } catch (err) {
+      alert('Error: ' + (err.response?.data?.message || 'Could not update inventory'));
+    }
+  };
+
   const tabs = [
-    {id:'overview',  icon:'🏠', label:'Overview'},
-    {id:'requests',  icon:'📋', label:'Requests'},
-    {id:'fleet',     icon:'🚛', label:'Fleet'},
-    {id:'complaints',icon:'🚨', label:'Complaints'},
-    {id:'analytics', icon:'📊', label:'Analytics'},
+    {id:'overview',   icon:'🏠', label:'Overview'},
+    {id:'requests',   icon:'📋', label:'Requests'},
+    {id:'recyclable-list', icon:'📦', label:'Waste Inventory'}, // New Tab added to list
+    {id:'fleet',      icon:'🚛', label:'Fleet'},
+    {id:'complaints', icon:'🚨', label:'Complaints'},
+    {id:'analytics',  icon:'📊', label:'Analytics'},
   ];
 
   const filtered = filterStatus==='all' ? requests : requests.filter(r=>r.status===filterStatus);
@@ -180,6 +225,53 @@ export default function GovtDashboard() {
                 </tbody>
               </table>
               {filtered.length===0 && <div style={{padding:'3rem',textAlign:'center',color:'#6b7280'}}>No requests found for this filter.</div>}
+            </div>
+          </div>
+        )}
+
+        {/* RECYCLABLE WASTE INVENTORY - MERGED COMPONENT */}
+        {tab === 'recyclable-list' && (
+          <div style={{ padding: '0px' }}>
+            <h2 style={{ color: '#14532d', fontWeight: 800, marginBottom: '1.5rem' }}>📦 Manage Recyclable Waste Inventory</h2>
+            
+            {/* Update Form */}
+            <form onSubmit={handleUpdateInventory} style={{ background: '#fff', padding: '1.5rem', borderRadius: '12px', marginBottom: '2rem', border: '1px solid #e5e7eb', display: 'flex', gap: '1rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: '200px' }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Item Name</label>
+                <input name="itemName" required style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1.5px solid #e5e7eb', outline: 'none' }} placeholder="e.g. Plastic Bottles" />
+              </div>
+              <div style={{ width: '120px' }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Quantity</label>
+                <input name="quantity" type="number" required style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1.5px solid #e5e7eb', outline: 'none' }} />
+              </div>
+              <div style={{ width: '120px' }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#6b7280', display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Unit</label>
+                <input name="unit" required style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1.5px solid #e5e7eb', outline: 'none' }} placeholder="kg / tons" />
+              </div>
+              <button type="submit" style={{ background: '#16a34a', color: '#fff', border: 'none', padding: '0.65rem 1.5rem', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' }}>Update List</button>
+            </form>
+
+            {/* Inventory Table */}
+            <div style={{ background: '#fff', borderRadius: '12px', overflow: 'hidden', border: '1px solid #e5e7eb' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead style={{ background: '#f0fdf4' }}>
+                  <tr>
+                    <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.72rem', fontWeight: 700, color: '#6b7280', borderBottom: '1px solid #e5e7eb', textTransform: 'uppercase' }}>Material</th>
+                    <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.72rem', fontWeight: 700, color: '#6b7280', borderBottom: '1px solid #e5e7eb', textTransform: 'uppercase' }}>Current Quantity</th>
+                    <th style={{ padding: '1rem', textAlign: 'left', fontSize: '0.72rem', fontWeight: 700, color: '#6b7280', borderBottom: '1px solid #e5e7eb', textTransform: 'uppercase' }}>Unit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inventory.map(item => (
+                    <tr key={item._id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                      <td style={{ padding: '1rem', fontWeight: 600, fontSize: '0.875rem' }}>{item.itemName}</td>
+                      <td style={{ padding: '1rem', fontWeight: 800, color: '#16a34a', fontSize: '1rem' }}>{item.quantity}</td>
+                      <td style={{ padding: '1rem', color: '#6b7280', fontSize: '0.875rem' }}>{item.unit}</td>
+                    </tr>
+                  ))}
+                  {inventory.length === 0 && <tr><td colSpan={3} style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>No inventory recorded yet.</td></tr>}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
@@ -303,13 +395,6 @@ export default function GovtDashboard() {
                     );
                   })}
                 </div>
-              </div>
-            )}
-
-            {!analytics.wasteTypes?.length && !analytics.dailyPickups?.length && (
-              <div style={{background:'#fff',borderRadius:12,border:'1px solid #e5e7eb',padding:'3rem',textAlign:'center',color:'#6b7280'}}>
-                <div style={{fontSize:'3rem',marginBottom:'1rem'}}>📊</div>
-                <div style={{fontWeight:700}}>Analytics will appear here once requests come in.</div>
               </div>
             )}
           </div>

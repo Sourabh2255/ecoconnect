@@ -63,4 +63,9 @@ export const getNotifications = ()   => API.get('/notifications');
 export const markAllRead      = ()   => API.put('/notifications/read-all');
 export const markRead         = (id) => API.put(`/notifications/${id}/read`);
 
+export const getRecyclableInventory = () => API.get('/government/recyclable-inventory');
+export const updateRecyclableInventory = (data) => API.post('/government/recyclable-inventory/update', data);
+export const getAvailableMaterials = () => API.get('/industry/available-materials');
+
+
 export default API;

@@ -5,11 +5,46 @@ const PickupRequest = require('../models/PickupRequest');
 const IssueReport   = require('../models/IssueReport');
 const User          = require('../models/User');
 const Notification  = require('../models/Notification');
+const RecyclableWaste = require('../models/RecyclableWaste');
 
-// ── Get All Requests ─────────────────────────────────────
+// ── NEW: Recyclable Waste Inventory ──────────────────────
+
+// Get all recyclable waste inventory
+router.get('/recyclable-inventory', protect, authorize('government'), async (req, res) => {
+  try {
+    const inventory = await RecyclableWaste.find().sort({ itemName: 1 });
+    res.json(inventory);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Update or Create Recyclable Waste item
+router.post('/recyclable-inventory/update', protect, authorize('government'), async (req, res) => {
+  try {
+    const { itemName, quantity, unit } = req.body;
+
+    const updatedItem = await RecyclableWaste.findOneAndUpdate(
+      { itemName: itemName.trim() },
+      {
+        quantity: Number(quantity),
+        unit,
+        lastUpdatedBy: req.user._id
+      },
+      { upsert: true, new: true, runValidators: true }
+    );
+
+    res.json({ message: 'Inventory updated successfully', item: updatedItem });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ── Existing: Pickup Requests ────────────────────────────
+
 router.get('/requests', protect, authorize('government'), async (req, res) => {
   try {
-    const { status, zone } = req.query;
+    const { status } = req.query;
     const filter = {};
     if (status && status !== 'all') filter.status = status;
     const requests = await PickupRequest.find(filter)
@@ -20,7 +55,6 @@ router.get('/requests', protect, authorize('government'), async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// ── Assign Collector ─────────────────────────────────────
 router.put('/request/:id/assign', protect, authorize('government'), async (req, res) => {
   try {
     const { collectorId } = req.body;
@@ -34,7 +68,6 @@ router.put('/request/:id/assign', protect, authorize('government'), async (req, 
 
     if (!request) return res.status(404).json({ message: 'Request not found' });
 
-    // Notify the citizen
     await Notification.create({
       user:    request.citizen._id,
       title:   'Collector Assigned!',
@@ -46,7 +79,6 @@ router.put('/request/:id/assign', protect, authorize('government'), async (req, 
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// ── Update Request Status ─────────────────────────────────
 router.put('/request/:id/status', protect, authorize('government'), async (req, res) => {
   try {
     const { status } = req.body;
@@ -67,11 +99,11 @@ router.put('/request/:id/status', protect, authorize('government'), async (req, 
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// ── Get Fleet (all government collectors) ────────────────
+// ── Existing: Fleet & Analytics ──────────────────────────
+
 router.get('/fleet', protect, authorize('government'), async (req, res) => {
   try {
     const collectors = await User.find({ role: 'government' }).select('-password');
-    // Attach active requests count
     const fleet = await Promise.all(collectors.map(async (c) => {
       const active = await PickupRequest.countDocuments({ collector: c._id, status: { $in: ['confirmed','en-route'] } });
       const done   = await PickupRequest.countDocuments({ collector: c._id, status: 'collected' });
@@ -81,7 +113,6 @@ router.get('/fleet', protect, authorize('government'), async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// ── Analytics Dashboard ──────────────────────────────────
 router.get('/analytics', protect, authorize('government'), async (req, res) => {
   try {
     const total      = await PickupRequest.countDocuments();
@@ -94,13 +125,11 @@ router.get('/analytics', protect, authorize('government'), async (req, res) => {
     const citizens   = await User.countDocuments({ role: 'citizen' });
     const collectors = await User.countDocuments({ role: 'government' });
 
-    // Waste type breakdown
     const wasteTypes = await PickupRequest.aggregate([
       { $unwind: '$wasteTypes' },
       { $group: { _id: '$wasteTypes', count: { $sum: 1 } } }
     ]);
 
-    // Daily pickups last 7 days
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const dailyPickups = await PickupRequest.aggregate([
       { $match: { createdAt: { $gte: sevenDaysAgo } } },
@@ -122,7 +151,8 @@ router.get('/analytics', protect, authorize('government'), async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// ── Get Complaints ────────────────────────────────────────
+// ── Existing: Complaints ─────────────────────────────────
+
 router.get('/complaints', protect, authorize('government'), async (req, res) => {
   try {
     const { status } = req.query;
@@ -131,7 +161,7 @@ router.get('/complaints', protect, authorize('government'), async (req, res) => 
       .populate('citizen', 'fullName phone')
       .populate('assignedTo', 'fullName')
       .sort({ createdAt: -1 });
-    // Mark escalated if open > 48 hours
+    
     const withEscalation = complaints.map(c => ({
       ...c.toObject(),
       isEscalated: c.status !== 'resolved' &&
@@ -141,7 +171,6 @@ router.get('/complaints', protect, authorize('government'), async (req, res) => 
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// ── Resolve Complaint ─────────────────────────────────────
 router.put('/complaint/:id/resolve', protect, authorize('government'), async (req, res) => {
   try {
     const complaint = await IssueReport.findByIdAndUpdate(
@@ -160,7 +189,6 @@ router.put('/complaint/:id/resolve', protect, authorize('government'), async (re
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// ── Assign Complaint ──────────────────────────────────────
 router.put('/complaint/:id/assign', protect, authorize('government'), async (req, res) => {
   try {
     const { assignedTo } = req.body;
