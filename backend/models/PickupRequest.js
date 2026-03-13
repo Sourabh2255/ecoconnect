@@ -1,5 +1,4 @@
 const mongoose = require('mongoose');
-
 const pickupRequestSchema = new mongoose.Schema({
   citizen:    { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   collector:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -24,5 +23,4 @@ const pickupRequestSchema = new mongoose.Schema({
   rating:           { type: Number, min: 1, max: 5 },
   feedback:         { type: String }
 }, { timestamps: true });
-
 module.exports = mongoose.model('PickupRequest', pickupRequestSchema);
