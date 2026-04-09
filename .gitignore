@@ -1,0 +1,36 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Build outputs
+dist/
+build/
+coverage/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# ML artifacts/logs
+*.h5
+*.keras
+*.ckpt
+*.tflite
+
+# OS/Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
